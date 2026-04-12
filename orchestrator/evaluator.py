@@ -16,6 +16,7 @@ Decision rules:
 - compliance_risk == "high": 强制人工审核
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -272,7 +273,7 @@ Be objective and data-driven in your evaluation."""
                 decision=decision,
                 reasoning=data.get("reasoning", ""),
                 estimated_ai_cost=data.get("estimated_ai_cost", 0.1),
-                suggested_price=data.get("suggested_price", signal.estimated_revenue or 0),
+                suggested_price=data.get("suggested_price", 0),
                 risk_factors=data.get("risk_factors", []),
                 compliance_override=compliance_override,
                 recommended_skills=data.get("recommended_skills", []),
@@ -365,8 +366,8 @@ Be objective and data-driven in your evaluation."""
         """Update signal record with evaluation results"""
         signal.score = result.total_score
         signal.status = SignalStatus.EVALUATED
-        signal.metadata = {
-            **(signal.metadata or {}),
+        signal.meta_data = {
+            **(signal.meta_data or {}),
             "evaluation": {
                 "scores": {
                     "revenue_potential": result.scores.revenue_potential,

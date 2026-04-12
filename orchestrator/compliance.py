@@ -393,12 +393,20 @@ class ComplianceGateway:
     ) -> list:
         """Get list of pending human tasks"""
         async with async_session_maker() as session:
-            from sqlalchemy import select
+            from sqlalchemy import select, case
+            
+            # Priority weight: high=3, normal=2, low=1 (for correct sorting)
+            priority_weight = case(
+                (HumanTask.priority == 'high', 3),
+                (HumanTask.priority == 'normal', 2),
+                (HumanTask.priority == 'low', 1),
+                else_=0
+            )
             
             query = select(HumanTask).where(
                 HumanTask.status == HumanTaskStatus.PENDING
             ).order_by(
-                HumanTask.priority.desc(),
+                priority_weight.desc(),
                 HumanTask.created_at.asc()
             ).limit(limit)
             

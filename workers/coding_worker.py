@@ -86,22 +86,23 @@ class CodingWorker(BaseWorker):
             self.logger.info("Using generic coding flow")
             
             # Step 3: Analyze and create dev plan
-            dev_plan, cost = await self._analyze_requirements(requirements)
+            task_id = str(task.id)
+            dev_plan, cost = await self._analyze_requirements(requirements, task_id)
             total_cost += cost
             ai_calls += 1
             
             # Step 4: Generate code
-            code_files, cost = await self._generate_code(requirements, dev_plan)
+            code_files, cost = await self._generate_code(requirements, dev_plan, task_id)
             total_cost += cost
             ai_calls += 1
             
             # Step 5: Generate tests
-            test_files, cost = await self._generate_tests(code_files)
+            test_files, cost = await self._generate_tests(code_files, task_id)
             total_cost += cost
             ai_calls += 1
             
             # Step 6: Generate documentation
-            doc_files, cost = await self._generate_docs(code_files, requirements)
+            doc_files, cost = await self._generate_docs(code_files, requirements, task_id)
             total_cost += cost
             ai_calls += 1
             
@@ -159,7 +160,7 @@ class CodingWorker(BaseWorker):
             "doc_files": [],
         }
     
-    async def _analyze_requirements(self, requirements: dict) -> tuple[dict, float]:
+    async def _analyze_requirements(self, requirements: dict, task_id: str) -> tuple[dict, float]:
         """
         Step 1: Analyze requirements and create development plan
         """
@@ -187,6 +188,7 @@ Output a JSON development plan:
             system="You are a senior software architect. Output valid JSON only.",
             temperature=0.3,
             max_tokens=1500,
+            task_id=task_id,
         )
         
         try:
@@ -204,7 +206,8 @@ Output a JSON development plan:
     async def _generate_code(
         self,
         requirements: dict,
-        dev_plan: dict
+        dev_plan: dict,
+        task_id: str,
     ) -> tuple[List[CodeFile], float]:
         """
         Step 2: Generate code based on development plan
@@ -244,6 +247,7 @@ Output ONLY the code file content, starting with the filename in a comment:
                 system="You are an expert programmer. Generate production-quality code.",
                 temperature=0.3,
                 max_tokens=3000,
+                task_id=task_id,
             )
             
             total_cost += response.cost
@@ -259,7 +263,7 @@ Output ONLY the code file content, starting with the filename in a comment:
         
         return files, total_cost
     
-    async def _generate_tests(self, code_files: List[CodeFile]) -> tuple[List[CodeFile], float]:
+    async def _generate_tests(self, code_files: List[CodeFile], task_id: str) -> tuple[List[CodeFile], float]:
         """
         Step 3: Generate unit tests
         """
@@ -290,6 +294,7 @@ Output the test file(s) in this format:
             system="You are a QA engineer. Generate thorough tests.",
             temperature=0.3,
             max_tokens=3000,
+            task_id=task_id,
         )
         
         # Parse test files
@@ -307,7 +312,8 @@ Output the test file(s) in this format:
     async def _generate_docs(
         self,
         code_files: List[CodeFile],
-        requirements: dict
+        requirements: dict,
+        task_id: str,
     ) -> tuple[List[CodeFile], float]:
         """
         Step 4: Generate documentation
@@ -337,6 +343,7 @@ Output the README.md content."""
             system="You are a technical writer.",
             temperature=0.3,
             max_tokens=2000,
+            task_id=task_id,
         )
         
         content = response.content

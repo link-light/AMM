@@ -20,6 +20,13 @@ PRIORITY_WEIGHTS = {
     "low": 1,
 }
 
+# Model pricing per 1M tokens (output price for estimation)
+MODEL_PRICING = {
+    "opus": 75.0,      # $75 per 1M output tokens
+    "sonnet": 15.0,    # $15 per 1M output tokens
+    "haiku": 4.0,      # $4 per 1M output tokens
+}
+
 
 class RateLimiter:
     """
@@ -120,8 +127,9 @@ class RateLimiter:
         current_cost = await redis_client.get(cost_key)
         current_cost = float(current_cost) if current_cost else 0.0
         
-        # Estimate cost (rough: $3 per 1M tokens for sonnet)
-        estimated_cost = expected_tokens * 3.0 / 1_000_000
+        # Estimate cost based on model tier pricing
+        price_per_million = MODEL_PRICING.get(model_tier, 15.0)  # default to sonnet price
+        estimated_cost = expected_tokens * price_per_million / 1_000_000
         if current_cost + estimated_cost > limits["daily_cost"]:
             retry_after = 86400 - (now % 86400)
             logger.warning(f"Daily cost limit exceeded for {model_tier}")

@@ -8,13 +8,13 @@ Features:
 4. Pushes to appropriate queues
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 
-from celery import chain, chord, group
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -139,7 +139,7 @@ Guidelines:
 - First task should often be "human" for submitting a proposal
 - Last task should be delivery (often "human")
 - Coding tasks can usually be "auto"
-- Any action on the freelance platform should be "human""""
+- Any action on the freelance platform should be "human"""
 
     def _parse_tasks(self, response_text: str, signal: Signal) -> List[TaskDefinition]:
         """Parse AI response into TaskDefinitions"""
@@ -303,11 +303,14 @@ Guidelines:
                 task_def = task_defs[i]
                 if task_def.depends_on:
                     # Convert temporary indices to actual IDs
-                    deps = [
-                        task_id_map.get(int(d), d)
-                        for d in task_def.depends_on
-                        if int(d) in task_id_map
-                    ]
+                    deps = []
+                    for d in task_def.depends_on:
+                        try:
+                            idx = int(d)
+                            if idx in task_id_map:
+                                deps.append(task_id_map[idx])
+                        except (ValueError, TypeError):
+                            pass  # Ignore non-integer dependencies
                     task.depends_on = deps
             
             await session.commit()
@@ -320,16 +323,24 @@ Guidelines:
     
     async def _enqueue_tasks(self, tasks: List[Task]):
         """Enqueue tasks for execution"""
-        # Separate auto and manual tasks
+        # Separate tasks by execution type
         auto_tasks = [t for t in tasks if t.execution_type == ExecutionType.AUTO.value]
-        manual_tasks = [t for t in tasks if t.execution_type != ExecutionType.AUTO.value]
+        semi_tasks = [t for t in tasks if t.execution_type == ExecutionType.SEMI.value]
+        manual_tasks = [t for t in tasks if t.execution_type == ExecutionType.MANUAL.value]
         
         # Enqueue auto tasks
         for task in auto_tasks:
-            # Check if task has dependencies
             if not task.depends_on:
                 await queue_manager.enqueue_task(task.to_dict())
                 self.logger.debug(f"Auto task {task.id} enqueued")
+        
+        # Semi tasks: AI executes first, then human confirms
+        for task in semi_tasks:
+            # TODO: Phase 2 - AI generates materials, then creates human task for confirmation
+            # For now, treat as auto + notification
+            if not task.depends_on:
+                await queue_manager.enqueue_task(task.to_dict())
+                self.logger.debug(f"Semi task {task.id} enqueued for AI execution")
         
         # Create human tasks for manual tasks
         for task in manual_tasks:
@@ -364,7 +375,7 @@ Guidelines:
                 strategic_value=scores.get("strategic_value", 0),
                 compliance_risk=scores.get("compliance_risk", 0),
             ),
-            total_score=eval_meta.get("decision", "pending") == "accepted" and 75 or 50,
+            total_score=eval_meta.get("total_score", 50),
             decision=eval_meta.get("decision", "pending"),
             reasoning=eval_meta.get("reasoning", ""),
             estimated_ai_cost=eval_meta.get("estimated_ai_cost", 0),

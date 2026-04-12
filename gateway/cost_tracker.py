@@ -124,7 +124,7 @@ class CostTracker:
         
         pipe = redis_client.pipeline()
         pipe.incrbyfloat(daily_key, cost)
-        pipe.expire(daily_key, 172800)  # 2 day TTL
+        pipe.expire(daily_key, 2592000)  # 30 day TTL
         pipe.incrbyfloat(monthly_key, cost)
         pipe.expire(monthly_key, 2592000)  # 30 day TTL
         
