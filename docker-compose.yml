@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: amm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: amm-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-amm}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ammpass}
+      POSTGRES_DB: ${DB_NAME:-amm}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-amm} -d ${DB_NAME:-amm}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: amm-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DEBUG=${DEBUG:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://amm:ammpass@postgres:5432/amm}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - DAILY_LIMIT=${DAILY_LIMIT:-20.0}
+      - MONTHLY_LIMIT=${MONTHLY_LIMIT:-400.0}
+      - PER_TASK_LIMIT=${PER_TASK_LIMIT:-5.0}
+      - MOCK_AI=${MOCK_AI:-true}
+      - MOCK_SCOUTS=${MOCK_SCOUTS:-true}
+    volumes:
+      - .:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: amm-celery-worker
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://amm:ammpass@postgres:5432/amm}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - MOCK_AI=${MOCK_AI:-true}
+      - MOCK_SCOUTS=${MOCK_SCOUTS:-true}
+    volumes:
+      - .:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: celery -A celery_app worker --loglevel=info
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: amm-celery-beat
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://amm:ammpass@postgres:5432/amm}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - MOCK_AI=${MOCK_AI:-true}
+      - MOCK_SCOUTS=${MOCK_SCOUTS:-true}
+    volumes:
+      - .:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: celery -A celery_app beat --loglevel=info
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
