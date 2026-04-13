@@ -13,15 +13,17 @@ from gateway.circuit_breaker import CircuitBreaker
 from gateway.providers.anthropic import AnthropicProvider
 from gateway.providers.base import BaseProvider
 from gateway.providers.deepseek import DeepSeekProvider
+from gateway.providers.kimi import KimiProvider
 from gateway.providers.openai import OpenAIProvider
 
 logger = logging.getLogger(__name__)
 
 # Provider configuration
 PROVIDER_CONFIG = {
-    "anthropic": {"priority": 1, "enabled": True},
-    "openai": {"priority": 2, "enabled": False},  # Phase 1: disabled
-    "deepseek": {"priority": 3, "enabled": False},  # Phase 1: disabled
+    "kimi": {"priority": 1, "enabled": True},       # Primary: Kimi for testing
+    "deepseek": {"priority": 2, "enabled": True},   # Secondary: DeepSeek
+    "anthropic": {"priority": 3, "enabled": False}, # Disabled for now
+    "openai": {"priority": 4, "enabled": False},    # Phase 1: disabled
 }
 
 # Model mapping by tier
@@ -29,17 +31,20 @@ MODEL_MAPPING = {
     "opus": {
         "anthropic": "claude-opus-4-6",
         "openai": "gpt-4o",
-        "deepseek": "deepseek-chat"
+        "deepseek": "deepseek-chat",
+        "kimi": "moonshot-v1-128k"
     },
     "sonnet": {
         "anthropic": "claude-sonnet-4-6",
         "openai": "gpt-4o-mini",
-        "deepseek": "deepseek-chat"
+        "deepseek": "deepseek-chat",
+        "kimi": "moonshot-v1-32k"
     },
     "haiku": {
         "anthropic": "claude-haiku-4-5",
         "openai": "gpt-4o-mini",
-        "deepseek": "deepseek-chat"
+        "deepseek": "deepseek-chat",
+        "kimi": "moonshot-v1-8k"
     }
 }
 
@@ -73,7 +78,35 @@ class ProviderRouter:
         """Initialize provider instances"""
         config = settings.ai_gateway
         
-        # Anthropic (Phase 1: primary)
+        # Kimi (Primary for testing)
+        if PROVIDER_CONFIG["kimi"]["enabled"]:
+            try:
+                instance = KimiProvider()
+                self.providers["kimi"] = Provider(
+                    name="kimi",
+                    instance=instance,
+                    priority=PROVIDER_CONFIG["kimi"]["priority"],
+                    available=bool(config.kimi_api_key)
+                )
+                logger.info("Kimi provider initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize Kimi provider: {e}")
+        
+        # DeepSeek (Secondary)
+        if PROVIDER_CONFIG["deepseek"]["enabled"]:
+            try:
+                instance = DeepSeekProvider()
+                self.providers["deepseek"] = Provider(
+                    name="deepseek",
+                    instance=instance,
+                    priority=PROVIDER_CONFIG["deepseek"]["priority"],
+                    available=bool(config.deepseek_api_key)
+                )
+                logger.info("DeepSeek provider initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize DeepSeek provider: {e}")
+        
+        # Anthropic (Disabled for now)
         if PROVIDER_CONFIG["anthropic"]["enabled"]:
             try:
                 instance = AnthropicProvider()

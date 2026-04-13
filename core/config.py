@@ -49,6 +49,7 @@ class AIGatewayConfig(BaseSettings):
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     deepseek_api_key: str = Field(default="", alias="DEEPSEEK_API_KEY")
+    kimi_api_key: str = Field(default="", alias="KIMI_API_KEY")
     
     # Budget Hard Limits ($)
     daily_hard_limit: float = Field(default=20.0, alias="DAILY_HARD_LIMIT")
@@ -106,7 +107,13 @@ class AIGatewayConfig(BaseSettings):
                 "gpt-4o-mini": {"input": 0.15, "output": 0.60},
             },
             "deepseek": {
-                "deepseek-chat": {"input": 0.5, "output": 2.0},
+                "deepseek-chat": {"input": 0.27, "output": 1.10},
+                "deepseek-reasoner": {"input": 0.55, "output": 2.19},
+            },
+            "kimi": {
+                "moonshot-v1-8k": {"input": 1.67, "output": 1.67},
+                "moonshot-v1-32k": {"input": 3.33, "output": 3.33},
+                "moonshot-v1-128k": {"input": 8.33, "output": 8.33},
             }
         }
     
